@@ -1,1 +1,231 @@
-# Brain-Storm
+# BlueCollar
+
+> A blockchain education platform built on the **Stellar network**, delivering verifiable on-chain credentials and token-based learning incentives.
+
+---
+
+## Overview
+
+BlueCollar is a full-stack, monorepo education platform that leverages the Stellar blockchain to issue tamper-proof credentials when learners complete courses. It is a rebranded and extended fork of the StrellerMinds project by [StarkMindsHQ](https://github.com/StarkMindsHQ), adapted for a broader blue-collar and vocational training audience.
+
+The platform combines a modern web frontend, a scalable REST API backend, and a suite of Soroban smart contracts — all living in a single monorepo for streamlined development and deployment.
+
+---
+
+## Monorepo Structure
+
+```
+bluecollar/
+├── apps/
+│   ├── frontend/          # Next.js 14 web application (TypeScript)
+│   └── backend/           # NestJS REST API (TypeScript)
+├── contracts/
+│   ├── analytics/         # On-chain progress tracking (Rust/Soroban)
+│   ├── token/             # Reward token contract (Rust/Soroban)
+│   └── shared/            # RBAC & shared utilities (Rust/Soroban)
+├── scripts/               # Build and deploy scripts
+├── docs/                  # Extended documentation
+├── .github/workflows/     # CI/CD pipelines
+├── Cargo.toml             # Rust workspace
+├── package.json           # Node.js workspace root
+└── .env.example           # Environment variable template
+```
+
+---
+
+## Tech Stack
+
+### Frontend (`apps/frontend`)
+| Technology | Purpose |
+|---|---|
+| Next.js 14 (App Router) | React framework with SSR/SSG |
+| TypeScript | Type safety |
+| Tailwind CSS | Utility-first styling |
+| Zustand | Lightweight state management |
+| Axios | HTTP client |
+| @stellar/stellar-sdk | Stellar wallet integration |
+
+### Backend (`apps/backend`)
+| Technology | Purpose |
+|---|---|
+| NestJS | Scalable Node.js framework |
+| TypeScript | Type safety |
+| PostgreSQL + TypeORM | Relational database & ORM |
+| JWT + Passport | Authentication & authorization |
+| Swagger/OpenAPI | Auto-generated API docs |
+| @stellar/stellar-sdk | Blockchain credential issuance |
+| Redis | Caching & session management |
+
+### Smart Contracts (`contracts/`)
+| Technology | Purpose |
+|---|---|
+| Rust | Contract language |
+| Soroban SDK | Stellar smart contract framework |
+| Stellar CLI | Deployment & interaction |
+| wasm32 target | WebAssembly compilation |
+
+---
+
+## Features
+
+### Platform
+- **Course Management** — Browse, enroll in, and complete structured blockchain courses
+- **On-Chain Credentials** — Certificates issued as Stellar transactions upon course completion
+- **Token Rewards** — Earn BlueCollar tokens (BCT) for completing modules and courses
+- **Progress Tracking** — Real-time on-chain progress stored via the Analytics contract
+- **Role-Based Access** — Admin, Instructor, and Student roles enforced on-chain via RBAC
+
+### Smart Contracts
+- **Analytics Contract** — Records per-student, per-course progress percentages on-chain
+- **Token Contract** — Mints reward tokens to students upon verified course completion
+- **Shared Contract** — Provides RBAC, reentrancy guards, and common validation utilities
+
+### API
+- RESTful endpoints for auth, courses, users, and Stellar interactions
+- Interactive Swagger docs at `/api/docs`
+- JWT-secured routes with role guards
+
+---
+
+## Prerequisites
+
+| Tool | Version |
+|---|---|
+| Node.js | v18 or higher |
+| npm | v9 or higher |
+| PostgreSQL | v12 or higher |
+| Rust | v1.75 or higher |
+| Stellar CLI | v21.5.0 |
+| Docker | Optional (for local Stellar testnet) |
+
+---
+
+## Quick Start
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-org/bluecollar.git
+cd bluecollar
+```
+
+### 2. Set up environment variables
+
+```bash
+cp .env.example .env
+# Edit .env with your database credentials, JWT secret, and Stellar keys
+```
+
+### 3. Install Node.js dependencies
+
+```bash
+npm install
+```
+
+### 4. Start the backend
+
+```bash
+npm run dev:backend
+# API available at http://localhost:3000
+# Swagger docs at http://localhost:3000/api/docs
+```
+
+### 5. Start the frontend
+
+```bash
+npm run dev:frontend
+# App available at http://localhost:3001
+```
+
+### 6. Build smart contracts
+
+```bash
+# Install Rust wasm target first
+rustup target add wasm32-unknown-unknown
+
+# Build all contracts
+./scripts/build.sh
+```
+
+---
+
+## Smart Contract Deployment
+
+```bash
+# Deploy to testnet
+./scripts/deploy.sh testnet analytics
+
+# Deploy to mainnet
+./scripts/deploy.sh mainnet token
+```
+
+Requires `STELLAR_SECRET_KEY` set in your environment.
+
+---
+
+## Environment Variables
+
+See `.env.example` for the full list. Key variables:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_HOST` | PostgreSQL host |
+| `DATABASE_NAME` | Database name (default: `bluecollar`) |
+| `JWT_SECRET` | Secret for signing JWT tokens |
+| `STELLAR_SECRET_KEY` | Stellar account secret for credential issuance |
+| `STELLAR_NETWORK` | `testnet` or `mainnet` |
+| `NEXT_PUBLIC_API_URL` | Backend API URL for the frontend |
+
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/auth/register` | Register a new user |
+| POST | `/auth/login` | Login and receive JWT |
+| GET | `/courses` | List all published courses |
+| GET | `/courses/:id` | Get a single course |
+| GET | `/users/:id` | Get user profile |
+| GET | `/stellar/balance/:publicKey` | Get Stellar account balances |
+
+Full interactive docs: `http://localhost:3000/api/docs`
+
+---
+
+## CI/CD
+
+GitHub Actions workflows in `.github/workflows/ci.yml` run on every push and PR:
+
+- **Backend**: install → build → test
+- **Frontend**: install → build
+- **Contracts**: `cargo test` → `cargo fmt --check` → `cargo clippy`
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Commit with clear messages
+4. Ensure all CI checks pass
+5. Open a pull request with a detailed description
+
+---
+
+## Stellar & Soroban Resources
+
+- [Stellar Documentation](https://developers.stellar.org)
+- [Soroban Smart Contracts](https://soroban.stellar.org)
+- [Stellar Laboratory](https://laboratory.stellar.org)
+- [Stellar Discord](https://discord.gg/stellardev)
+
+---
+
+## License
+
+MIT — see [LICENSE](./LICENSE) for details.
+
+---
+
+*Built with ❤️ on the Stellar network. Inspired by [StrellerMinds](https://github.com/StarkMindsHQ) by StarkMindsHQ.*
