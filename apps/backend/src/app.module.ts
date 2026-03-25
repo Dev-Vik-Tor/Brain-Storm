@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { CoursesModule } from './courses/courses.module';
 import { UsersModule } from './users/users.module';
 import { StellarModule } from './stellar/stellar.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { StellarModule } from './stellar/stellar.module';
     CoursesModule,
     UsersModule,
     StellarModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

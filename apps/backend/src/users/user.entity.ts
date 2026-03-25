@@ -17,6 +17,15 @@ export class User {
   @Column({ default: 'student' })
   role: string;
 
+  @Column({ default: false })
+  isBanned: boolean;
+
+  @Column({ default: false })
+  isVerified: boolean;
+
+  @Column({ nullable: true })
+  deletedAt: Date;
+
   @CreateDateColumn()
   createdAt: Date;
 }
