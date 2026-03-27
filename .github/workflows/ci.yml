@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-test:
+    name: Backend — Install · Build · Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build backend
+        run: npm run build --workspace=apps/backend
+
+      - name: Run unit tests with coverage
+        run: npx jest --coverage --passWithNoTests
+        working-directory: apps/backend
+
+  frontend-build:
+    name: Frontend — Install · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build --workspace=apps/frontend
+
+  contracts-check:
+    name: Contracts — Test · Format · Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: cargo test
+        run: cargo test
+
+      - name: cargo fmt check
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        run: cargo clippy -- -D warnings
