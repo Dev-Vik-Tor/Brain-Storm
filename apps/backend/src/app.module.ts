@@ -12,6 +12,7 @@ import { ProgressModule } from './progress/progress.module';
 import { CredentialsModule } from './credentials/credentials.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { LoggerModule } from './common/logger';
+import { HealthModule } from './health/health.module';
 import * as redisStore from 'cache-manager-redis-store';
 
 @Module({
@@ -58,6 +59,7 @@ import * as redisStore from 'cache-manager-redis-store';
     ProgressModule,
     CredentialsModule,
     NotificationsModule,
+    HealthModule,
   ],
   providers: [
     {
