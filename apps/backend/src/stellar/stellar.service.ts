@@ -10,6 +10,8 @@ import {
   BASE_FEE,
   Operation,
   SorobanRpc,
+  nativeToScVal,
+  Address,
 } from '@stellar/stellar-sdk';
 
 const MAX_RETRIES = 3;
@@ -20,9 +22,9 @@ export class StellarService {
   private readonly logger = new Logger(StellarService.name);
   private server: Horizon.Server;
   private sorobanServer: SorobanRpc.Server;
-  private network: string;
   private networkPassphrase: string;
-  private contractId: string;
+  private analyticsContractId: string;
+  private tokenContractId: string;
 
   constructor(
     private configService: ConfigService,
@@ -31,9 +33,11 @@ export class StellarService {
     const isTestnet = this.configService.get<string>('stellar.network') !== 'mainnet';
     this.network = isTestnet ? 'testnet' : 'mainnet';
     this.networkPassphrase = isTestnet ? Networks.TESTNET : Networks.PUBLIC;
-    
+
     this.server = new Horizon.Server(
-      isTestnet ? 'https://horizon-testnet.stellar.org' : 'https://horizon.stellar.org',
+      isTestnet
+        ? 'https://horizon-testnet.stellar.org'
+        : 'https://horizon.stellar.org',
     );
     
     const rpcUrl = this.configService.get<string>('stellar.sorobanRpcUrl');
@@ -42,16 +46,11 @@ export class StellarService {
     this.contractId = this.configService.get<string>('stellar.contractId');
   }
 
+  // ── Public API ────────────────────────────────────────────────────────────
+
   async getAccountBalance(publicKey: string) {
-    const cacheKey = `stellar:balance:${publicKey}`;
-    const cached = await this.cacheManager.get(cacheKey);
-    if (cached) {
-      return cached;
-    }
     const account = await this.server.loadAccount(publicKey);
-    const balances = account.balances;
-    await this.cacheManager.set(cacheKey, balances, 30);
-    return balances;
+    return account.balances;
   }
 
   private async retryWithBackoff<T>(
@@ -84,10 +83,21 @@ export class StellarService {
     return this.mintCredentialViaHorizon(recipientPublicKey, courseId);
   }
 
-  private async recordProgressOnChain(studentPublicKey: string, courseId: string): Promise<void> {
-    if (!this.contractId) {
-      throw new Error('SOROBAN_CONTRACT_ID not configured');
+  /** Mint reward tokens via the Token Soroban contract */
+  async mintReward(
+    recipientPublicKey: string,
+    amount: number,
+  ): Promise<string> {
+    if (!this.tokenContractId) {
+      throw new Error('TOKEN_CONTRACT_ID not configured');
     }
+    return this.retryWithBackoff(() =>
+      this.invokeContract(this.tokenContractId, 'mint_reward', [
+        new Address(recipientPublicKey).toScVal(),
+        nativeToScVal(amount, { type: 'i128' }),
+      ]),
+    );
+  }
 
     const issuerKeypair = Keypair.fromSecret(this.configService.get<string>('stellar.secretKey'));
     const studentKeypair = Keypair.fromPublicKey(studentPublicKey);
@@ -119,11 +129,44 @@ export class StellarService {
     if (SorobanRpc.TxFailed(result)) {
       throw new Error(`Soroban contract call failed: ${result.hash}`);
     }
-    
-    this.logger.log(`Soroban contract call successful: ${result.hash}`);
   }
 
   private async issueCredentialFallback(recipientPublicKey: string, courseId: string): Promise<string> {
+    const issuerKeypair = Keypair.fromSecret(this.configService.get<string>('stellar.secretKey'));
+    const issuerAccount = await this.server.loadAccount(issuerKeypair.publicKey());
+
+  private async invokeContract(
+    contractId: string,
+    method: string,
+    args: any[],
+  ): Promise<string> {
+    const issuerKeypair = Keypair.fromSecret(
+      this.configService.get('STELLAR_SECRET_KEY')!,
+    );
+    const source = await this.sorobanServer.getAccount(issuerKeypair.publicKey());
+
+    const tx = new TransactionBuilder(source as any, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(
+        Operation.invokeContractFunction({
+          contract: contractId,
+          function: method,
+          args,
+        }),
+      )
+      .setTimeout(30)
+      .build();
+
+    const prepared = await this.sorobanServer.prepareTransaction(tx);
+    (prepared as any).sign(issuerKeypair);
+    const result = await this.sorobanServer.sendTransaction(prepared as any);
+    this.logger.log(`Contract ${method} tx: ${result.hash}`);
+    return result.hash;
+  }
+
+  private async mintCredentialViaHorizon(recipientPublicKey: string, courseId: string): Promise<string> {
     const issuerKeypair = Keypair.fromSecret(this.configService.get<string>('stellar.secretKey'));
     const issuerAccount = await this.server.loadAccount(issuerKeypair.publicKey());
 
@@ -142,30 +185,22 @@ export class StellarService {
 
     tx.sign(issuerKeypair);
     const result = await this.server.submitTransaction(tx);
-    this.logger.log(`Credential issued via Horizon fallback: ${result.hash}`);
+    this.logger.log(`Credential issued via Horizon: ${result.hash}`);
     return result.hash;
   }
 
-  private async mintCredentialViaHorizon(recipientPublicKey: string, courseId: string): Promise<string> {
-    const issuerKeypair = Keypair.fromSecret(this.configService.get<string>('stellar.secretKey'));
-    const issuerAccount = await this.server.loadAccount(issuerKeypair.publicKey());
-
-    const tx = new TransactionBuilder(issuerAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(
-        Operation.manageData({
-          name: `brain-storm:mint:${courseId}`,
-          value: recipientPublicKey,
-        }),
-      )
-      .setTimeout(30)
-      .build();
-
-    tx.sign(issuerKeypair);
-    const result = await this.server.submitTransaction(tx);
-    this.logger.log(`Credential minted: ${result.hash}`);
-    return result.hash;
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    attempt = 1,
+  ): Promise<T> {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt >= MAX_RETRIES) throw error;
+      const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      this.logger.warn(`Attempt ${attempt} failed, retrying in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+      return this.retryWithBackoff(fn, attempt + 1);
+    }
   }
 }

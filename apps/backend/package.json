@@ -6,7 +6,8 @@
     "start:dev": "nest start --watch",
     "build": "nest build",
     "start:prod": "node dist/main",
-    "test": "jest"
+    "test": "jest",
+    "test:e2e": "jest --config jest-e2e.config.js --runInBand"
   },
   "dependencies": {
     "@nest-lab/throttler-storage-redis": "^1.2.0",

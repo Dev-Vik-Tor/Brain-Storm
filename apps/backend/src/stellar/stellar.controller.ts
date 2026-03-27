@@ -24,8 +24,7 @@ export class StellarController {
 
   @Get('balance/:publicKey')
   @ApiOperation({ summary: 'Get Stellar account balance' })
-  @ApiResponse({ status: 200, description: 'Returns account balances', schema: { example: { data: [], statusCode: 200, timestamp: '2024-01-01T00:00:00.000Z' } } })
-  @ApiResponse({ status: 404, description: 'Account not found' })
+  @ApiResponse({ status: 200, description: 'Returns account balances' })
   getBalance(@Param('publicKey') publicKey: string) {
     return this.stellarService.getAccountBalance(publicKey);
   }

@@ -8,7 +8,11 @@ import { AuthModule } from './auth/auth.module';
 import { CoursesModule } from './courses/courses.module';
 import { UsersModule } from './users/users.module';
 import { StellarModule } from './stellar/stellar.module';
+import { ProgressModule } from './progress/progress.module';
+import { CredentialsModule } from './credentials/credentials.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { LoggerModule } from './common/logger';
+import { HealthModule } from './health/health.module';
 import * as redisStore from 'cache-manager-redis-store';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import configuration from './config/configuration';
@@ -65,7 +69,10 @@ import { validationSchema } from './config/validation.schema';
     CoursesModule,
     UsersModule,
     StellarModule,
+    ProgressModule,
+    CredentialsModule,
     NotificationsModule,
+    HealthModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

@@ -1,11 +1,40 @@
+// Root layout — locale-specific layout lives in app/[locale]/layout.tsx
+// This file is required by Next.js but the [locale] segment handles rendering.
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return children;
 import type { Metadata } from 'next';
 import './globals.css';
 import NetworkStatus from '@/components/ui/NetworkStatus';
 
 export const metadata: Metadata = {
-  title: 'Brain-Storm - Blockchain Education on Stellar',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'Brain-Storm - Blockchain Education on Stellar',
+    template: '%s | Brain-Storm',
+  },
   description:
     'Learn blockchain development with verifiable on-chain credentials powered by the Stellar network.',
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    siteName: 'Brain-Storm',
+    type: 'website',
+    title: 'Brain-Storm - Blockchain Education on Stellar',
+    description:
+      'Learn blockchain development with verifiable on-chain credentials powered by the Stellar network.',
+    url: SITE_URL,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Brain-Storm - Blockchain Education on Stellar',
+    description:
+      'Learn blockchain development with verifiable on-chain credentials powered by the Stellar network.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -12,6 +12,13 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('admin-only')
+  adminOnly() {
+    return { message: 'Admin access granted' };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get user by ID' })
   @ApiResponse({ status: 200, description: 'Returns user data', schema: { example: { data: {}, statusCode: 200, timestamp: '2024-01-01T00:00:00.000Z' } } })
