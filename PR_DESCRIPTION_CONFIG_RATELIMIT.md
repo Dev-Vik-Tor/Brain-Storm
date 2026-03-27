@@ -1,7 +1,8 @@
-# PR Description: Environment Config Validation & Redis Rate Limiting
+## Summary
+Resolves: #23
+Closes #23
 
-## 🚀 Overview
-This Pull Request implements a robust configuration management system and a distributed rate limiting layer to enhance platform security and reliability.
+Sets up Jest with @nestjs/testing and writes unit tests for `AuthService`, achieving ≥80% coverage on the `auth/` directory. A GitHub Actions CI workflow is also added to enforce testing on every push and PR.
 
 ## 🛠 Changes
 
