@@ -2,8 +2,6 @@ import { Injectable, Logger, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   Horizon,
   Keypair,
@@ -11,7 +9,6 @@ import {
   TransactionBuilder,
   BASE_FEE,
   Operation,
-  Asset,
   SorobanRpc,
 } from '@stellar/stellar-sdk';
 
@@ -31,8 +28,7 @@ export class StellarService {
     private configService: ConfigService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
-  constructor(private configService: ConfigService) {
-    const isTestnet = process.env.STELLAR_NETWORK !== 'mainnet';
+    const isTestnet = this.configService.get<string>('stellar.network') !== 'mainnet';
     this.network = isTestnet ? 'testnet' : 'mainnet';
     this.networkPassphrase = isTestnet ? Networks.TESTNET : Networks.PUBLIC;
     
@@ -40,10 +36,10 @@ export class StellarService {
       isTestnet ? 'https://horizon-testnet.stellar.org' : 'https://horizon.stellar.org',
     );
     
-    const rpcUrl = this.configService.get('SOROBAN_RPC_URL') || 'https://soroban-testnet.stellar.org';
+    const rpcUrl = this.configService.get<string>('stellar.sorobanRpcUrl');
     this.sorobanServer = new SorobanRpc.Server(rpcUrl);
     
-    this.contractId = this.configService.get('SOROBAN_CONTRACT_ID') || '';
+    this.contractId = this.configService.get<string>('stellar.contractId');
   }
 
   async getAccountBalance(publicKey: string) {
@@ -76,36 +72,15 @@ export class StellarService {
     }
   }
 
-  private async retryWithBackoff<T>(
-    fn: () => Promise<T>,
-    attempt: number = 1,
-  ): Promise<T> {
-    try {
-      return await fn();
-    } catch (error) {
-      if (attempt >= MAX_RETRIES) {
-        this.logger.error(`Max retries reached: ${error.message}`);
-        throw error;
-      }
-      const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-      this.logger.warn(`Attempt ${attempt} failed, retrying in ${delay}ms: ${error.message}`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return this.retryWithBackoff(fn, attempt + 1);
-    }
-  }
-
   async issueCredential(recipientPublicKey: string, courseId: string): Promise<string> {
-    // First, record progress via Soroban contract call
     try {
       await this.retryWithBackoff(() => this.recordProgressOnChain(recipientPublicKey, courseId));
       this.logger.log(`Progress recorded on Soroban for ${courseId}`);
     } catch (error) {
       this.logger.error(`Failed to record progress on Soroban: ${error.message}, falling back to Horizon`);
-      // Fallback to Horizon manageData if Soroban fails
       await this.issueCredentialFallback(recipientPublicKey, courseId);
     }
     
-    // Mint credential via Horizon (this is the actual credential issuance)
     return this.mintCredentialViaHorizon(recipientPublicKey, courseId);
   }
 
@@ -114,13 +89,11 @@ export class StellarService {
       throw new Error('SOROBAN_CONTRACT_ID not configured');
     }
 
-    const issuerKeypair = Keypair.fromSecret(process.env.STELLAR_SECRET_KEY!);
+    const issuerKeypair = Keypair.fromSecret(this.configService.get<string>('stellar.secretKey'));
     const studentKeypair = Keypair.fromPublicKey(studentPublicKey);
     
-    // Build the Soroban contract invoke transaction
     const source = await this.sorobanServer.getAccount(issuerKeypair.publicKey());
     
-    // Create the contract invocation
     const tx = new SorobanRpc.TransactionBuilder(source, {
       fee: BASE_FEE.toString(),
       networkPassphrase: this.networkPassphrase,
@@ -133,19 +106,14 @@ export class StellarService {
           args: [
             new SorobanRpc.Address(studentKeypair.publicKey()).toScVal(),
             new SorobanRpc.Symbol(courseId).toScVal(),
-            SorobanRpc.xdr.Int32.of(100).toScVal(), // progress_pct = 100
+            SorobanRpc.xdr.Int32.of(100).toScVal(),
           ],
         }),
       )
       .build();
 
-    // Prepare the transaction
     const preparedTx = await this.sorobanServer.prepareTransaction(tx);
-    
-    // Sign the transaction
     preparedTx.sign(issuerKeypair);
-    
-    // Submit the transaction
     const result = await this.sorobanServer.sendTransaction(preparedTx);
     
     if (SorobanRpc.TxFailed(result)) {
@@ -156,7 +124,7 @@ export class StellarService {
   }
 
   private async issueCredentialFallback(recipientPublicKey: string, courseId: string): Promise<string> {
-    const issuerKeypair = Keypair.fromSecret(process.env.STELLAR_SECRET_KEY!);
+    const issuerKeypair = Keypair.fromSecret(this.configService.get<string>('stellar.secretKey'));
     const issuerAccount = await this.server.loadAccount(issuerKeypair.publicKey());
 
     const tx = new TransactionBuilder(issuerAccount, {
@@ -179,10 +147,9 @@ export class StellarService {
   }
 
   private async mintCredentialViaHorizon(recipientPublicKey: string, courseId: string): Promise<string> {
-    const issuerKeypair = Keypair.fromSecret(process.env.STELLAR_SECRET_KEY!);
+    const issuerKeypair = Keypair.fromSecret(this.configService.get<string>('stellar.secretKey'));
     const issuerAccount = await this.server.loadAccount(issuerKeypair.publicKey());
 
-    // Use manageData as the credential mint mechanism on Horizon
     const tx = new TransactionBuilder(issuerAccount, {
       fee: BASE_FEE,
       networkPassphrase: this.networkPassphrase,

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
@@ -6,29 +7,29 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private transporter: nodemailer.Transporter;
 
-  constructor() {
+  constructor(private configService: ConfigService) {
     this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '587'),
-      secure: process.env.EMAIL_SECURE === 'true',
+      host: this.configService.get<string>('mail.host'),
+      port: this.configService.get<number>('mail.port'),
+      secure: this.configService.get<boolean>('mail.secure'),
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: this.configService.get<string>('mail.user'),
+        pass: this.configService.get<string>('mail.pass'),
       },
     });
   }
 
   async sendPasswordResetEmail(to: string, token: string) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = this.configService.get<string>('frontend.url');
     const resetUrl = `${frontendUrl}/auth/reset-password?token=${token}`;
 
-    if (process.env.EMAIL_ENABLED !== 'true') {
+    if (!this.configService.get<boolean>('mail.enabled')) {
       this.logger.log(`[DEV] Password reset link for ${to}: ${resetUrl}`);
       return;
     }
 
     await this.transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"Brain Storm" <no-reply@brainstorm.app>',
+      from: this.configService.get<string>('mail.from'),
       to,
       subject: 'Reset your password',
       html: `<p>Click the link below to reset your password. It expires in 1 hour.</p>
@@ -38,16 +39,16 @@ export class MailService {
   }
 
   async sendVerificationEmail(to: string, token: string) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const frontendUrl = this.configService.get<string>('frontend.url');
     const verifyUrl = `${frontendUrl}/auth/verify?token=${token}`;
 
-    if (process.env.EMAIL_ENABLED !== 'true') {
+    if (!this.configService.get<boolean>('mail.enabled')) {
       this.logger.log(`[DEV] Verification link for ${to}: ${verifyUrl}`);
       return;
     }
 
     await this.transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"Brain Storm" <no-reply@brainstorm.app>',
+      from: this.configService.get<string>('mail.from'),
       to,
       subject: 'Verify your email',
       html: `<p>Click the link below to verify your email. It expires in 24 hours.</p>

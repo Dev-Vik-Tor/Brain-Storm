@@ -1,7 +1,5 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { GoogleAuthGuard } from './google-auth.guard';
@@ -36,7 +34,7 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User registered successfully', schema: { example: { data: { access_token: 'jwt_token' }, statusCode: 201, timestamp: '2024-01-01T00:00:00.000Z' } } })
   @ApiResponse({ status: 400, description: 'Invalid input' })
@@ -46,7 +44,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'Login successful', schema: { example: { data: { access_token: 'jwt_token' }, statusCode: 200, timestamp: '2024-01-01T00:00:00.000Z' } } })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })

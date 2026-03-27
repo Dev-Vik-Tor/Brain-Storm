@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
 import { AuthService } from './auth.service';
@@ -18,13 +19,16 @@ import { RefreshToken } from './refresh-token.entity';
     MailModule,
     PassportModule,
     TypeOrmModule.forFeature([PasswordResetToken, RefreshToken]),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'dev_secret',
-      signOptions: { expiresIn: '15m' },
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('jwt.secret'),
+        signOptions: { expiresIn: '15m' },
+      }),
     }),
   ],
   providers: [AuthService, JwtStrategy, JwtAuthGuard, RolesGuard],
-  providers: [AuthService, JwtStrategy],
   controllers: [AuthController],
   exports: [JwtAuthGuard, RolesGuard],
 })
