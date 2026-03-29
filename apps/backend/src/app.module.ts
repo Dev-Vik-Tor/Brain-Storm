@@ -13,6 +13,7 @@ import { CredentialsModule } from './credentials/credentials.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { LoggerModule } from './common/logger';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 import * as redisStore from 'cache-manager-redis-store';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import configuration from './config/configuration';
@@ -73,6 +74,7 @@ import { validationSchema } from './config/validation.schema';
     CredentialsModule,
     NotificationsModule,
     HealthModule,
+    MetricsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
