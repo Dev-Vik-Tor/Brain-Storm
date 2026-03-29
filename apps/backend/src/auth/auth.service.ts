@@ -12,8 +12,12 @@ import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { PasswordResetToken } from './password-reset-token.entity';
 import { RefreshToken } from './refresh-token.entity';
+import { ApiKey } from './api-key.entity';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { authenticator } from 'otplib';
+import * as qrcode from 'qrcode';
+import { EncryptionService } from '../common/encryption.service';
 
 @Injectable()
 export class AuthService {
@@ -25,6 +29,9 @@ export class AuthService {
     private resetTokenRepo: Repository<PasswordResetToken>,
     @InjectRepository(RefreshToken)
     private refreshTokenRepo: Repository<RefreshToken>,
+    @InjectRepository(ApiKey)
+    private apiKeyRepo: Repository<ApiKey>,
+    private encryptionService: EncryptionService,
   ) {}
 
   async register(email: string, password: string) {
@@ -46,7 +53,7 @@ export class AuthService {
     return { message: 'Registration successful. Please verify your email.' };
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, mfaToken?: string) {
     const user = await this.usersService.findByEmail(email);
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid credentials');
@@ -60,8 +67,19 @@ export class AuthService {
     if (!user.isVerified) {
       throw new ForbiddenException('Please verify your email before logging in');
     }
+
+    if (user.mfaEnabled) {
+      if (!mfaToken) {
+        return { mfa_required: true };
+      }
+      const secret = this.encryptionService.decrypt(user.mfaSecret || '');
+      const isValid = authenticator.verify({ token: mfaToken, secret });
+      if (!isValid) {
+        throw new UnauthorizedException('Invalid MFA token');
+      }
+    }
     
-    return this.issueTokenPair(user.id, user.email);
+    return this.issueTokenPair(user.id, user.email, user.role);
   }
 
   async refresh(rawRefreshToken: string) {
@@ -169,6 +187,71 @@ export class AuthService {
     await this.resetTokenRepo.save({ ...resetToken, used: true });
 
     return { message: 'Password reset successfully. You can now log in.' };
+  }
+
+  async generateMfaSecret(userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const secret = authenticator.generateSecret();
+    const otpauthUrl = authenticator.keyuri(user.email, 'Brain-Storm', secret);
+    const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
+
+    await this.usersService.update(userId, {
+      mfaSecret: this.encryptionService.encrypt(secret),
+      mfaEnabled: false,
+    });
+
+    return { secret, qrCodeDataUrl };
+  }
+
+  async verifyMfaSecret(userId: string, code: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user || !user.mfaSecret) throw new BadRequestException('MFA setup not initiated');
+
+    const secret = this.encryptionService.decrypt(user.mfaSecret);
+    const isValid = authenticator.verify({ token: code, secret });
+
+    if (!isValid) throw new BadRequestException('Invalid MFA code');
+
+    await this.usersService.update(userId, { mfaEnabled: true });
+    return { message: 'MFA enabled successfully' };
+  }
+
+  async disableMfa(userId: string, code: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      throw new BadRequestException('MFA is not enabled');
+    }
+
+    const secret = this.encryptionService.decrypt(user.mfaSecret);
+    const isValid = authenticator.verify({ token: code, secret });
+
+    if (!isValid) throw new BadRequestException('Invalid MFA code');
+
+    await this.usersService.update(userId, { mfaEnabled: false, mfaSecret: null });
+    return { message: 'MFA disabled successfully' };
+  }
+
+  async generateApiKey(userId: string, name: string) {
+    const rawKey = `bst_${crypto.randomBytes(32).toString('hex')}`;
+    const hash = crypto.createHash('sha256').update(rawKey).digest('hex');
+
+    await this.apiKeyRepo.save(
+      this.apiKeyRepo.create({
+        name,
+        keyHash: hash,
+        userId,
+        isActive: true,
+      }),
+    );
+
+    return { apiKey: rawKey };
+  }
+
+  async revokeApiKey(id: string) {
+    await this.apiKeyRepo.update(id, { isActive: false });
+    return { message: 'API key revoked' };
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

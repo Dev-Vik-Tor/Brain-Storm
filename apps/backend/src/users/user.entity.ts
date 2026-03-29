@@ -41,6 +41,12 @@ export class User {
   @Column({ nullable: true, type: 'datetime' })
   verificationTokenExpiresAt: Date | null;
 
+  @Column({ default: false })
+  mfaEnabled: boolean;
+
+  @Column({ nullable: true })
+  mfaSecret: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }
