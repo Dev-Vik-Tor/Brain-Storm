@@ -40,6 +40,7 @@ const TRANSFER: Symbol = symbol_short!("transfer");
 const APPROVE: Symbol = symbol_short!("approve");
 const MINT: Symbol = symbol_short!("mint");
 const BURN: Symbol = symbol_short!("burn");
+const MAX_SUPPLY: i128 = 10_000_000_000_000_000; // 1 billion BST with 7 decimals
 
 // =============================================================================
 // Contract
@@ -247,7 +248,7 @@ impl TokenContract {
         // Deduct allowance
         env.storage().persistent().set(
             &DataKey::Allowance(from.clone(), spender.clone()),
-            &(allowed - amount),
+            &(allowed.checked_sub(amount).expect("arithmetic overflow")),
         );
 
         Self::sub_balance(&env, &from, amount);
@@ -301,10 +302,10 @@ impl TokenContract {
             env.storage().persistent().get(&key).expect("No vesting schedule found");
 
         let claimable =
-            Self::vested_amount(&schedule, env.ledger().sequence()) - schedule.claimed;
+            Self::vested_amount(&schedule, env.ledger().sequence()).checked_sub(schedule.claimed).expect("arithmetic overflow");
         assert!(claimable > 0, "Nothing to claim yet");
 
-        schedule.claimed += claimable;
+        schedule.claimed = schedule.claimed.checked_add(claimable).expect("arithmetic overflow");
         env.storage().persistent().set(&key, &schedule);
 
         Self::add_balance(&env, &beneficiary, claimable);
@@ -344,47 +345,36 @@ impl TokenContract {
     // -------------------------------------------------------------------------
 
     fn add_balance(env: &Env, addr: &Address, amount: i128) {
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Balance(addr.clone()))
-            .unwrap_or(0);
+        let current = Self::balance(env.clone(), addr.clone());
+        let new_balance = current.checked_add(amount).expect("arithmetic overflow");
         env.storage()
             .persistent()
-            .set(&DataKey::Balance(addr.clone()), &(current + amount));
+            .set(&DataKey::Balance(addr.clone()), &new_balance);
     }
 
     fn sub_balance(env: &Env, addr: &Address, amount: i128) {
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Balance(addr.clone()))
-            .unwrap_or(0);
+        let current = Self::balance(env.clone(), addr.clone());
+        let new_balance = current.checked_sub(amount).expect("arithmetic overflow");
         env.storage()
             .persistent()
-            .set(&DataKey::Balance(addr.clone()), &(current - amount));
+            .set(&DataKey::Balance(addr.clone()), &new_balance);
     }
 
     fn add_supply(env: &Env, amount: i128) {
-        let current: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalSupply)
-            .unwrap_or(0);
+        let current = Self::total_supply(env.clone());
+        let new_supply = current.checked_add(amount).expect("arithmetic overflow");
+        assert!(new_supply <= MAX_SUPPLY, "Max supply exceeded");
         env.storage()
             .instance()
-            .set(&DataKey::TotalSupply, &(current + amount));
+            .set(&DataKey::TotalSupply, &new_supply);
     }
 
     fn sub_supply(env: &Env, amount: i128) {
-        let current: i128 = env
-            .storage()
-            .instance()
-            .get(&DataKey::TotalSupply)
-            .unwrap_or(0);
+        let current = Self::total_supply(env.clone());
+        let new_supply = current.checked_sub(amount).expect("arithmetic overflow");
         env.storage()
             .instance()
-            .set(&DataKey::TotalSupply, &(current - amount));
+            .set(&DataKey::TotalSupply, &new_supply);
     }
 
     fn vested_amount(schedule: &VestingSchedule, current_ledger: u32) -> i128 {
@@ -394,9 +384,12 @@ impl TokenContract {
         if current_ledger >= schedule.end_ledger {
             return schedule.total_amount;
         }
-        let elapsed = (current_ledger - schedule.start_ledger) as i128;
-        let duration = (schedule.end_ledger - schedule.start_ledger) as i128;
-        schedule.total_amount * elapsed / duration
+        let elapsed = (current_ledger.checked_sub(schedule.start_ledger).expect("arithmetic overflow")) as i128;
+        let duration = (schedule.end_ledger.checked_sub(schedule.start_ledger).expect("arithmetic overflow")) as i128;
+        
+        schedule.total_amount
+            .checked_mul(elapsed).expect("arithmetic overflow")
+            .checked_div(duration).expect("arithmetic overflow")
     }
 }
 
@@ -624,6 +617,29 @@ mod tests {
         let rando = Address::generate(&env);
         set_ledger(&env, 10);
         client.create_vesting(&rando, &instructor, &1000, &20, &30);
+    }
+
+    #[test]
+    #[should_panic(expected = "Max supply exceeded")]
+    fn test_mint_exceeds_max_supply_panics() {
+        let (_, client, _) = setup();
+        let user = Address::generate(&client.env);
+        client.mint(&user, &MAX_SUPPLY);
+        client.mint(&user, &1);
+    }
+
+    #[test]
+    #[should_panic(expected = "arithmetic overflow")]
+    fn test_overflow_protection() {
+        let (_, client, _) = setup();
+        let user = Address::generate(&client.env);
+        // Mint max i128 to user (if possible, but constrained by MAX_SUPPLY)
+        // Actually, we can just test if checked_add works.
+        // Since add_balance uses checked_add, we can try to add to a balance that would overflow if it wasn't for MAX_SUPPLY.
+        // But MAX_SUPPLY is smaller than i128::MAX.
+        // Let's test a case where we try to subtract more than balance (already tested by insufficient balance usually, but now it uses checked_sub)
+        client.mint(&user, &100);
+        client.burn(&user, &101);
     }
 
     // ---- Double-init guard --------------------------------------------------

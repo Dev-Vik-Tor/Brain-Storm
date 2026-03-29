@@ -1,14 +1,23 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { GoogleAuthGuard } from './google-auth.guard';
 import { GoogleProfile } from './google.strategy';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { Roles } from './roles.decorator';
+import { RolesGuard } from './roles.guard';
 
 class AuthDto {
   @IsEmail() email: string;
   @IsString() @MinLength(8) password: string;
+}
+
+class LoginDto extends AuthDto {
+  @IsString()
+  @IsOptional()
+  mfa_token?: string;
 }
 
 class ResendVerificationDto {
@@ -48,8 +57,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'Login successful', schema: { example: { data: { access_token: 'jwt_token' }, statusCode: 200, timestamp: '2024-01-01T00:00:00.000Z' } } })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  login(@Body() dto: AuthDto) {
-    return this.authService.login(dto.email, dto.password);
+  login(@Body() dto: LoginDto) {
+    return this.authService.login(dto.email, dto.password, dto.mfa_token);
   }
 
   @Post('refresh')
@@ -81,5 +90,37 @@ export class AuthController {
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Post('mfa/enable')
+  @UseGuards(JwtAuthGuard)
+  enableMfa(@Request() req) {
+    return this.authService.generateMfaSecret(req.user.id);
+  }
+
+  @Post('mfa/verify')
+  @UseGuards(JwtAuthGuard)
+  verifyMfa(@Request() req, @Body('code') code: string) {
+    return this.authService.verifyMfaSecret(req.user.id, code);
+  }
+
+  @Post('mfa/disable')
+  @UseGuards(JwtAuthGuard)
+  disableMfa(@Request() req, @Body('code') code: string) {
+    return this.authService.disableMfa(req.user.id, code);
+  }
+
+  @Post('admin/api-keys')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  generateApiKey(@Body('userId') userId: string, @Body('name') name: string) {
+    return this.authService.generateApiKey(userId, name);
+  }
+
+  @Post('admin/api-keys/revoke')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  revokeApiKey(@Body('id') id: string) {
+    return this.authService.revokeApiKey(id);
   }
 }

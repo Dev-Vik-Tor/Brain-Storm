@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -27,7 +28,7 @@ export class CredentialsController {
   }
 
   @Post('issue')
-  @UseGuards(RolesGuard)
+  @UseGuards(AuthGuard(['jwt', 'api-key']), RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Admin: manually issue a credential' })
   @ApiResponse({ status: 201, description: 'Credential issued' })
