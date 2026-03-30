@@ -6,13 +6,25 @@ export const handlers = [
   http.get(`${BASE}/courses`, () =>
     HttpResponse.json({
       data: [
-        { id: '1', title: 'Intro to Stellar Blockchain', level: 'beginner', durationHours: 4, isPublished: true },
-        { id: '2', title: 'Soroban Smart Contracts', level: 'intermediate', durationHours: 8, isPublished: true },
+        {
+          id: '1',
+          title: 'Intro to Stellar Blockchain',
+          level: 'beginner',
+          durationHours: 4,
+          isPublished: true,
+        },
+        {
+          id: '2',
+          title: 'Soroban Smart Contracts',
+          level: 'intermediate',
+          durationHours: 8,
+          isPublished: true,
+        },
       ],
       total: 2,
       page: 1,
       limit: 20,
-    }),
+    })
   ),
 
   http.get(`${BASE}/users/me`, () =>
@@ -26,6 +38,19 @@ export const handlers = [
       createdAt: '2024-01-01T00:00:00.000Z',
       stellarPublicKey: 'GABC...',
     }),
+    })
+  ),
+
+  http.get(`${BASE}/credentials/:userId`, () =>
+    HttpResponse.json([
+      {
+        id: 'cred-1',
+        courseId: 'course-1',
+        courseName: 'Intro to Stellar Blockchain',
+        issuedAt: '2024-06-01T00:00:00.000Z',
+        txHash: 'abc123txhash',
+      },
+    ])
   ),
 
   http.get(`${BASE}/users/user-1/token-balance`, () =>
