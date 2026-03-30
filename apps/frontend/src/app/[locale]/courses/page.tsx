@@ -39,17 +39,24 @@ export default function CoursesPage() {
               aria-label={t('viewCourseLabel', { title: course.title })}
               className="mt-3 inline-block text-blue-700 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
             >
-              {t('viewCourse')}
-            </Link>
-          </li>
-        ))}
-      </ul>
-              className="mt-3 inline-block text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              {t('viewCourse')}
-            </Link>
-          </div>
-        ))}
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{course.title}</h2>
+              <p className="text-gray-700 dark:text-gray-400 mt-1">
+                {t(`levels.${course.level}`)} · {course.duration}
+              </p>
+              <Link
+                href={`/courses/${course.id}`}
+                aria-label={t('viewCourseLabel', { title: course.title })}
+                className="mt-3 inline-block text-blue-700 dark:text-blue-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+              >
+                {t('viewCourse')}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </main>
+    </ProtectedRoute>
+  );
+}
       </div>
     </main>
     </ProtectedRoute>
