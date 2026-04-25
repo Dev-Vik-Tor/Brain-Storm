@@ -16,11 +16,17 @@ import { SearchModule } from '../search/search.module';
 import { CourseVersion } from './course-version.entity';
 import { CourseVersioningService } from './course-versioning.service';
 import { CourseVersioningController } from './course-versioning.controller';
+import { CoursePrerequisite } from './course-prerequisite.entity';
+import { PrerequisitesService } from './prerequisites.service';
+import { PrerequisitesController } from './prerequisites.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Course, CourseModule, Lesson, Review, Enrollment, CourseVersion]), SearchModule],
-  providers: [CoursesService, ModulesService, LessonsService, ReviewsService, CourseVersioningService],
-  controllers: [CoursesController, ModulesController, ReviewsController, CourseVersioningController],
-  exports: [CoursesService],
+  imports: [
+    TypeOrmModule.forFeature([Course, CourseModule, Lesson, Review, Enrollment, CourseVersion, CoursePrerequisite]),
+    SearchModule,
+  ],
+  providers: [CoursesService, ModulesService, LessonsService, ReviewsService, CourseVersioningService, PrerequisitesService],
+  controllers: [CoursesController, ModulesController, ReviewsController, CourseVersioningController, PrerequisitesController],
+  exports: [CoursesService, PrerequisitesService],
 })
 export class CoursesModule {}
