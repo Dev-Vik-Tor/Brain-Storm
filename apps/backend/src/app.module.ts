@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AuthModule } from './auth/auth.module';
@@ -27,6 +27,8 @@ import { ModerationModule } from './moderation/moderation.module';
 import { ImportExportModule } from './import-export/import-export.module';
 import { SearchModule } from './search/search.module';
 import { BatchModule } from './batch/batch.module';
+import { ApiUsageModule } from './api-usage/api-usage.module';
+import { ApiUsageInterceptor } from './api-usage/api-usage.interceptor';
 import * as redisStore from 'cache-manager-redis-store';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import configuration from './config/configuration';
@@ -103,7 +105,11 @@ import { validationSchema } from './config/validation.schema';
     ImportExportModule,
     SearchModule,
     BatchModule,
+    ApiUsageModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: ApiUsageInterceptor },
+  ],
 })
 export class AppModule {}
