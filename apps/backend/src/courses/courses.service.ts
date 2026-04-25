@@ -6,6 +6,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject } from '@nestjs/common';
 import { Course } from './course.entity';
 import { CourseQueryDto } from './dto/course-query.dto';
+import { SearchService } from '../search/search.service';
 
 @Injectable()
 export class CoursesService {
@@ -14,7 +15,8 @@ export class CoursesService {
 
   constructor(
     @InjectRepository(Course) private repo: Repository<Course>,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly searchService: SearchService
   ) {}
 
   async findAll(query: CourseQueryDto = {}) {
@@ -68,6 +70,7 @@ export class CoursesService {
   async create(data: Partial<Course>) {
     const course = await this.repo.save(this.repo.create(data));
     await this.invalidateCache();
+    await this.searchService.indexCourse(course).catch(() => {});
     return course;
   }
 
@@ -76,6 +79,7 @@ export class CoursesService {
     if (!course) throw new NotFoundException('Course not found');
     const updated = await this.repo.save({ ...course, ...data });
     await this.invalidateCache();
+    await this.searchService.indexCourse(updated).catch(() => {});
     return updated;
   }
 
@@ -84,6 +88,7 @@ export class CoursesService {
     if (!course) throw new NotFoundException('Course not found');
     const removed = await this.repo.remove(course);
     await this.invalidateCache();
+    await this.searchService.deleteFromIndex('courses', id).catch(() => {});
     return removed;
   }
 

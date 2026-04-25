@@ -8,6 +8,7 @@ import { Post } from './post.entity';
 import { Reply } from './reply.entity';
 import { ModerationService } from '../moderation/moderation.service';
 import { ContentType } from '../moderation/moderation.enums';
+import { SearchService } from '../search/search.service';
 
 @Injectable()
 export class ForumsService {
@@ -18,7 +19,8 @@ export class ForumsService {
     private readonly replyRepo: Repository<Reply>,
     @InjectRepository(Course)
     private readonly courseRepo: Repository<Course>,
-    private readonly moderationService: ModerationService
+    private readonly moderationService: ModerationService,
+    private readonly searchService: SearchService
   ) {}
 
   async findPostsByCourse(courseId: string) {
@@ -53,6 +55,7 @@ export class ForumsService {
       `${saved.title} ${saved.content}`,
       userId
     );
+    await this.searchService.indexPost(saved).catch(() => {});
     return saved;
   }
 
