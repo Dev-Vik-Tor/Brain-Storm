@@ -67,4 +67,9 @@ export default () => ({
   moderation: {
     toxicityThreshold: parseFloat(process.env.MODERATION_TOXICITY_THRESHOLD || '0.7'),
   },
+
+  elasticsearch: {
+    node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
+    apiKey: process.env.ELASTICSEARCH_API_KEY || '',
+  },
 });

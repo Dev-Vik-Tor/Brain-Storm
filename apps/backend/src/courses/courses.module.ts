@@ -12,9 +12,10 @@ import { Review } from './review.entity';
 import { Enrollment } from '../enrollments/enrollment.entity';
 import { ReviewsService } from './reviews.service';
 import { ReviewsController } from './reviews.controller';
+import { SearchModule } from '../search/search.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Course, CourseModule, Lesson, Review, Enrollment])],
+  imports: [TypeOrmModule.forFeature([Course, CourseModule, Lesson, Review, Enrollment]), SearchModule],
   providers: [CoursesService, ModulesService, LessonsService, ReviewsService],
   controllers: [CoursesController, ModulesController, ReviewsController],
   exports: [CoursesService],

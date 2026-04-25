@@ -59,4 +59,8 @@ export const validationSchema = Joi.object({
 
   // Moderation
   MODERATION_TOXICITY_THRESHOLD: Joi.number().min(0).max(1).default(0.7),
+
+  // Elasticsearch
+  ELASTICSEARCH_NODE: Joi.string().uri().default('http://localhost:9200'),
+  ELASTICSEARCH_API_KEY: Joi.string().allow('').default(''),
 });
