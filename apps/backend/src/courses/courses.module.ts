@@ -13,11 +13,14 @@ import { Enrollment } from '../enrollments/enrollment.entity';
 import { ReviewsService } from './reviews.service';
 import { ReviewsController } from './reviews.controller';
 import { SearchModule } from '../search/search.module';
+import { CourseVersion } from './course-version.entity';
+import { CourseVersioningService } from './course-versioning.service';
+import { CourseVersioningController } from './course-versioning.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Course, CourseModule, Lesson, Review, Enrollment]), SearchModule],
-  providers: [CoursesService, ModulesService, LessonsService, ReviewsService],
-  controllers: [CoursesController, ModulesController, ReviewsController],
+  imports: [TypeOrmModule.forFeature([Course, CourseModule, Lesson, Review, Enrollment, CourseVersion]), SearchModule],
+  providers: [CoursesService, ModulesService, LessonsService, ReviewsService, CourseVersioningService],
+  controllers: [CoursesController, ModulesController, ReviewsController, CourseVersioningController],
   exports: [CoursesService],
 })
 export class CoursesModule {}
