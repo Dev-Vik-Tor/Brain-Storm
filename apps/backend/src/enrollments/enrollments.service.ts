@@ -3,18 +3,22 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Enrollment } from './enrollment.entity';
+import { PrerequisitesService } from '../courses/prerequisites.service';
 
 @Injectable()
 export class EnrollmentsService {
   constructor(
     @InjectRepository(Enrollment)
     private repo: Repository<Enrollment>,
-    private eventEmitter: EventEmitter2
+    private eventEmitter: EventEmitter2,
+    private prereqService: PrerequisitesService,
   ) {}
 
-  async enroll(userId: string, courseId: string): Promise<Enrollment> {
+  async enroll(userId: string, courseId: string, adminOverride = false): Promise<Enrollment> {
     const existing = await this.repo.findOne({ where: { userId, courseId } });
     if (existing) throw new ConflictException('Already enrolled in this course');
+
+    await this.prereqService.enforcePrerequisites(userId, courseId, adminOverride);
 
     const enrollment = await this.repo.save(this.repo.create({ userId, courseId }));
 

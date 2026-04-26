@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { EnrollmentsService } from './enrollments.service';
@@ -25,10 +25,16 @@ export class EnrollmentsController {
     },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Prerequisites not completed' })
   @ApiResponse({ status: 404, description: 'Course not found' })
   @ApiResponse({ status: 409, description: 'Already enrolled' })
-  enroll(@Param('id') courseId: string, @Request() req: { user: { id: string } }) {
-    return this.enrollmentsService.enroll(req.user.id, courseId);
+  enroll(
+    @Param('id') courseId: string,
+    @Request() req: { user: { id: string; role: string } },
+    @Body('adminOverride') adminOverride?: boolean,
+  ) {
+    const isAdmin = req.user.role === 'admin';
+    return this.enrollmentsService.enroll(req.user.id, courseId, isAdmin && !!adminOverride);
   }
 
   @Delete('courses/:id/enroll')
