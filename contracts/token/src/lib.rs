@@ -528,6 +528,44 @@ impl TokenContract {
     }
 
     // -------------------------------------------------------------------------
+    // Vesting Schedule Modification (governance)
+    // -------------------------------------------------------------------------
+
+    pub fn modify_vesting_v2(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        schedule_id: u32,
+        new_end_ledger: u32,
+    ) {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        assert!(admin == stored_admin, "Only admin can modify vesting");
+
+        let key = DataKey::VestingV2(beneficiary.clone(), schedule_id);
+        let mut schedule: VestingScheduleV2 = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("No vesting schedule found");
+
+        assert!(
+            new_end_ledger > schedule.cliff_ledger,
+            "New end must be after cliff"
+        );
+
+        schedule.end_ledger = new_end_ledger;
+        env.storage().persistent().set(&key, &schedule);
+    }
+
+    pub fn get_vesting_schedule_count(env: Env, beneficiary: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::VestingScheduleCount(beneficiary))
+            .unwrap_or(0)
+    }
+
+    // -------------------------------------------------------------------------
     // Legacy mint_reward (kept for backward compat)
     // -------------------------------------------------------------------------
 
@@ -1127,6 +1165,60 @@ mod tests {
         client.mint(&alice, &100);
         client.approve(&alice, &spender, &200);
         client.transfer_from(&spender, &alice, &bob, &200);
+    }
+
+    // ---- Vesting Modification Tests ------------------------------------------
+
+    #[test]
+    fn test_modify_vesting_v2_extend_end_ledger() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &0, &0);
+        
+        // Modify to extend end ledger
+        client.modify_vesting_v2(&admin, &instructor, &schedule_id, &50);
+        
+        let schedule = client.get_vesting_v2(&instructor, &schedule_id).unwrap();
+        assert_eq!(schedule.end_ledger, 50);
+    }
+
+    #[test]
+    #[should_panic(expected = "Only admin can modify vesting")]
+    fn test_non_admin_cannot_modify_vesting() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        let rando = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &0, &0);
+        
+        client.modify_vesting_v2(&rando, &instructor, &schedule_id, &50);
+    }
+
+    #[test]
+    #[should_panic(expected = "New end must be after cliff")]
+    fn test_modify_vesting_invalid_end_ledger_panics() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &0, &0);
+        
+        client.modify_vesting_v2(&admin, &instructor, &schedule_id, &5);
+    }
+
+    #[test]
+    fn test_get_vesting_schedule_count() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        
+        assert_eq!(client.get_vesting_schedule_count(&instructor), 0);
+        
+        client.create_vesting_v2(&admin, &instructor, &500, &10, &30, &0, &0);
+        assert_eq!(client.get_vesting_schedule_count(&instructor), 1);
+        
+        client.create_vesting_v2(&admin, &instructor, &500, &10, &30, &0, &0);
+        assert_eq!(client.get_vesting_schedule_count(&instructor), 2);
     }
 
     // ---- Vesting Overflow Tests ----------------------------------------------
