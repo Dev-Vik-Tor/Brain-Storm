@@ -102,4 +102,6 @@ impl SharedContract {
     }
 }
 
+pub mod multisig;
+
 mod tests;
