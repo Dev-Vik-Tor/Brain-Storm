@@ -13,6 +13,7 @@ pub enum DataKey {
     Certificate(u64),                    // id → CertificateRecord
     OwnerCertificates(Address),          // owner → Vec<u64>
     NextId,                              // u64 counter
+    Revocation(u64),                     // id → RevocationRecord
 }
 
 // =============================================================================
@@ -29,11 +30,20 @@ pub struct CertificateRecord {
     pub issued_at: u64,
 }
 
+#[contracttype]
+#[derive(Clone)]
+pub struct RevocationRecord {
+    pub certificate_id: u64,
+    pub revoked_at: u64,
+    pub reason: String,
+}
+
 // =============================================================================
 // Events
 // =============================================================================
 
 const MINT: Symbol = symbol_short!("mint");
+const REVOKE: Symbol = symbol_short!("revoke");
 
 // =============================================================================
 // Contract
@@ -135,6 +145,53 @@ impl CertificateContract {
             }
         }
         results
+    }
+
+    // -------------------------------------------------------------------------
+    // Revocation (admin only)
+    // -------------------------------------------------------------------------
+
+    pub fn revoke_certificate(env: Env, admin: Address, cert_id: u64, reason: String) {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        assert!(admin == stored_admin, "Only admin can revoke");
+        assert!(
+            env.storage()
+                .persistent()
+                .has(&DataKey::Certificate(cert_id)),
+            "Certificate not found"
+        );
+        assert!(
+            !env.storage()
+                .persistent()
+                .has(&DataKey::Revocation(cert_id)),
+            "Certificate already revoked"
+        );
+
+        let revocation = RevocationRecord {
+            certificate_id: cert_id,
+            revoked_at: env.ledger().timestamp(),
+            reason: reason.clone(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Revocation(cert_id), &revocation);
+
+        env.events()
+            .publish((REVOKE, symbol_short!("cert_id")), (cert_id, reason));
+    }
+
+    pub fn is_revoked(env: Env, cert_id: u64) -> bool {
+        env.storage()
+            .persistent()
+            .has(&DataKey::Revocation(cert_id))
+    }
+
+    pub fn get_revocation(env: Env, cert_id: u64) -> Option<RevocationRecord> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Revocation(cert_id))
     }
 
     // -------------------------------------------------------------------------
@@ -255,5 +312,60 @@ mod tests {
 
         let id = client.mint_certificate(&admin, &owner, &course, &url);
         client.transfer(&owner, &other, &id);
+    }
+
+    #[test]
+    fn test_revoke_certificate() {
+        let (env, client, admin) = setup();
+        let owner = Address::generate(&env);
+        let course = symbol_short!("RUST101");
+        let url = String::from_str(&env, "https://example.com/cert");
+        let reason = String::from_str(&env, "Academic misconduct");
+
+        let id = client.mint_certificate(&admin, &owner, &course, &url);
+        assert!(!client.is_revoked(&id));
+
+        client.revoke_certificate(&admin, &id, &reason);
+        assert!(client.is_revoked(&id));
+
+        let revocation = client.get_revocation(&id).unwrap();
+        assert_eq!(revocation.certificate_id, id);
+        assert_eq!(revocation.reason, reason);
+    }
+
+    #[test]
+    #[should_panic(expected = "Only admin can revoke")]
+    fn test_non_admin_cannot_revoke() {
+        let (env, client, admin) = setup();
+        let owner = Address::generate(&env);
+        let rando = Address::generate(&env);
+        let course = symbol_short!("RUST101");
+        let url = String::from_str(&env, "https://example.com/cert");
+        let reason = String::from_str(&env, "Test");
+
+        let id = client.mint_certificate(&admin, &owner, &course, &url);
+        client.revoke_certificate(&rando, &id, &reason);
+    }
+
+    #[test]
+    #[should_panic(expected = "Certificate not found")]
+    fn test_revoke_nonexistent_certificate_panics() {
+        let (env, client, admin) = setup();
+        let reason = String::from_str(&env, "Test");
+        client.revoke_certificate(&admin, &999, &reason);
+    }
+
+    #[test]
+    #[should_panic(expected = "Certificate already revoked")]
+    fn test_revoke_twice_panics() {
+        let (env, client, admin) = setup();
+        let owner = Address::generate(&env);
+        let course = symbol_short!("RUST101");
+        let url = String::from_str(&env, "https://example.com/cert");
+        let reason = String::from_str(&env, "Test");
+
+        let id = client.mint_certificate(&admin, &owner, &course, &url);
+        client.revoke_certificate(&admin, &id, &reason);
+        client.revoke_certificate(&admin, &id, &reason);
     }
 }

@@ -17,6 +17,10 @@ pub enum DataKey {
     TotalSupply,
     Vesting(Address),
     Locked, // reentrancy guard
+    BurnStats,
+    VestingV2(Address, u32),     // (beneficiary, schedule_id)
+    VestingScheduleCount(Address), // count of schedules per beneficiary
+    VestingAnalytics,
 }
 
 // =============================================================================
@@ -32,6 +36,35 @@ pub struct VestingSchedule {
     pub cliff_ledger: u32,
     pub end_ledger: u32,
     pub claimed: i128,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct BurnStats {
+    pub total_burned: i128,
+    pub burn_count: u32,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct VestingScheduleV2 {
+    pub id: u32,
+    pub beneficiary: Address,
+    pub total_amount: i128,
+    pub start_ledger: u32,
+    pub cliff_ledger: u32,
+    pub end_ledger: u32,
+    pub claimed: i128,
+    pub vesting_type: u8, // 0 = linear, 1 = step
+    pub step_count: u32,  // for step vesting
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct VestingAnalytics {
+    pub total_vested: i128,
+    pub total_claimed: i128,
+    pub active_schedules: u32,
 }
 
 // =============================================================================
@@ -188,6 +221,24 @@ impl TokenContract {
         Self::sub_balance(&env, &from, amount);
         Self::sub_supply(&env, amount);
 
+        // Update burn stats
+        let mut stats: BurnStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::BurnStats)
+            .unwrap_or(BurnStats {
+                total_burned: 0,
+                burn_count: 0,
+            });
+        stats.total_burned = stats
+            .total_burned
+            .checked_add(amount)
+            .expect("arithmetic overflow");
+        stats.burn_count = stats.burn_count.checked_add(1).expect("arithmetic overflow");
+        env.storage()
+            .instance()
+            .set(&DataKey::BurnStats, &stats);
+
         env.events()
             .publish((BURN, symbol_short!("from"), from), amount);
     }
@@ -210,6 +261,24 @@ impl TokenContract {
 
         Self::sub_balance(&env, &from, amount);
         Self::sub_supply(&env, amount);
+
+        // Update burn stats
+        let mut stats: BurnStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::BurnStats)
+            .unwrap_or(BurnStats {
+                total_burned: 0,
+                burn_count: 0,
+            });
+        stats.total_burned = stats
+            .total_burned
+            .checked_add(amount)
+            .expect("arithmetic overflow");
+        stats.burn_count = stats.burn_count.checked_add(1).expect("arithmetic overflow");
+        env.storage()
+            .instance()
+            .set(&DataKey::BurnStats, &stats);
 
         env.events()
             .publish((BURN, symbol_short!("from"), from), amount);
@@ -351,6 +420,153 @@ impl TokenContract {
             .get(&DataKey::Vesting(beneficiary))
     }
 
+    pub fn get_burn_stats(env: Env) -> BurnStats {
+        env.storage()
+            .instance()
+            .get(&DataKey::BurnStats)
+            .unwrap_or(BurnStats {
+                total_burned: 0,
+                burn_count: 0,
+            })
+    }
+
+    // -------------------------------------------------------------------------
+    // Vesting V2 (multiple schedules, linear & step)
+    // -------------------------------------------------------------------------
+
+    pub fn create_vesting_v2(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        total_amount: i128,
+        cliff_ledger: u32,
+        end_ledger: u32,
+        vesting_type: u8, // 0 = linear, 1 = step
+        step_count: u32,
+    ) -> u32 {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        assert!(admin == stored_admin, "Only admin can create vesting");
+        assert!(total_amount > 0, "Amount must be positive");
+        assert!(vesting_type <= 1, "Invalid vesting type");
+
+        let start_ledger = env.ledger().sequence();
+        assert!(cliff_ledger >= start_ledger, "Cliff must be >= start");
+        assert!(end_ledger > cliff_ledger, "End must be after cliff");
+
+        let count_key = DataKey::VestingScheduleCount(beneficiary.clone());
+        let schedule_id: u32 = env
+            .storage()
+            .persistent()
+            .get(&count_key)
+            .unwrap_or(0);
+
+        let schedule = VestingScheduleV2 {
+            id: schedule_id,
+            beneficiary: beneficiary.clone(),
+            total_amount,
+            start_ledger,
+            cliff_ledger,
+            end_ledger,
+            claimed: 0,
+            vesting_type,
+            step_count,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::VestingV2(beneficiary.clone(), schedule_id),
+            &schedule,
+        );
+        env.storage()
+            .persistent()
+            .set(&count_key, &(schedule_id + 1));
+
+        schedule_id
+    }
+
+    pub fn claim_vesting_v2(env: Env, beneficiary: Address, schedule_id: u32) {
+        beneficiary.require_auth();
+
+        let key = DataKey::VestingV2(beneficiary.clone(), schedule_id);
+        let mut schedule: VestingScheduleV2 = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("No vesting schedule found");
+
+        let claimable = Self::vested_amount_v2(&schedule, env.ledger().sequence())
+            .checked_sub(schedule.claimed)
+            .expect("arithmetic overflow");
+        assert!(claimable > 0, "Nothing to claim yet");
+
+        schedule.claimed = schedule
+            .claimed
+            .checked_add(claimable)
+            .expect("arithmetic overflow");
+        env.storage().persistent().set(&key, &schedule);
+
+        Self::add_balance(&env, &beneficiary, claimable);
+        Self::add_supply(&env, claimable);
+
+        env.events()
+            .publish((MINT, symbol_short!("to"), beneficiary), claimable);
+    }
+
+    pub fn get_vesting_v2(env: Env, beneficiary: Address, schedule_id: u32) -> Option<VestingScheduleV2> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::VestingV2(beneficiary, schedule_id))
+    }
+
+    pub fn get_vesting_analytics(env: Env) -> VestingAnalytics {
+        env.storage()
+            .instance()
+            .get(&DataKey::VestingAnalytics)
+            .unwrap_or(VestingAnalytics {
+                total_vested: 0,
+                total_claimed: 0,
+                active_schedules: 0,
+            })
+    }
+
+    // -------------------------------------------------------------------------
+    // Vesting Schedule Modification (governance)
+    // -------------------------------------------------------------------------
+
+    pub fn modify_vesting_v2(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        schedule_id: u32,
+        new_end_ledger: u32,
+    ) {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        assert!(admin == stored_admin, "Only admin can modify vesting");
+
+        let key = DataKey::VestingV2(beneficiary.clone(), schedule_id);
+        let mut schedule: VestingScheduleV2 = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("No vesting schedule found");
+
+        assert!(
+            new_end_ledger > schedule.cliff_ledger,
+            "New end must be after cliff"
+        );
+
+        schedule.end_ledger = new_end_ledger;
+        env.storage().persistent().set(&key, &schedule);
+    }
+
+    pub fn get_vesting_schedule_count(env: Env, beneficiary: Address) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::VestingScheduleCount(beneficiary))
+            .unwrap_or(0)
+    }
+
     // -------------------------------------------------------------------------
     // Legacy mint_reward (kept for backward compat)
     // -------------------------------------------------------------------------
@@ -428,6 +644,59 @@ impl TokenContract {
             .expect("arithmetic overflow")
             .checked_div(duration)
             .expect("arithmetic overflow")
+    }
+
+    fn vested_amount_v2(schedule: &VestingScheduleV2, current_ledger: u32) -> i128 {
+        if current_ledger < schedule.cliff_ledger {
+            return 0;
+        }
+        if current_ledger >= schedule.end_ledger {
+            return schedule.total_amount;
+        }
+
+        match schedule.vesting_type {
+            0 => {
+                // Linear vesting
+                let elapsed = (current_ledger
+                    .checked_sub(schedule.start_ledger)
+                    .expect("arithmetic overflow")) as i128;
+                let duration = (schedule
+                    .end_ledger
+                    .checked_sub(schedule.start_ledger)
+                    .expect("arithmetic overflow")) as i128;
+
+                schedule
+                    .total_amount
+                    .checked_mul(elapsed)
+                    .expect("arithmetic overflow")
+                    .checked_div(duration)
+                    .expect("arithmetic overflow")
+            }
+            1 => {
+                // Step vesting
+                if schedule.step_count == 0 {
+                    return schedule.total_amount;
+                }
+                let elapsed = (current_ledger
+                    .checked_sub(schedule.start_ledger)
+                    .expect("arithmetic overflow")) as u32;
+                let duration = schedule
+                    .end_ledger
+                    .checked_sub(schedule.start_ledger)
+                    .expect("arithmetic overflow");
+                let step_duration = duration.checked_div(schedule.step_count).unwrap_or(1);
+                let steps_completed = elapsed.checked_div(step_duration).unwrap_or(0);
+                let steps_completed = steps_completed.min(schedule.step_count);
+
+                schedule
+                    .total_amount
+                    .checked_mul(steps_completed as i128)
+                    .expect("arithmetic overflow")
+                    .checked_div(schedule.step_count as i128)
+                    .expect("arithmetic overflow")
+            }
+            _ => 0,
+        }
     }
 }
 
@@ -781,6 +1050,100 @@ mod tests {
     }
 
     #[test]
+    fn test_burn_stats_tracking() {
+        let (_, client, _) = setup();
+        let user = Address::generate(&client.env);
+        client.mint(&user, &1000);
+        client.burn(&user, &300);
+        client.burn(&user, &200);
+        let stats = client.get_burn_stats();
+        assert_eq!(stats.total_burned, 500);
+        assert_eq!(stats.burn_count, 2);
+    }
+
+    #[test]
+    fn test_burn_stats_with_burn_from() {
+        let (_, client, _) = setup();
+        let owner = Address::generate(&client.env);
+        let spender = Address::generate(&client.env);
+        client.mint(&owner, &500);
+        client.approve(&owner, &spender, &500);
+        client.burn(&owner, &100);
+        client.burn_from(&spender, &owner, &150);
+        let stats = client.get_burn_stats();
+        assert_eq!(stats.total_burned, 250);
+        assert_eq!(stats.burn_count, 2);
+    }
+
+    // ---- Vesting V2 (multiple schedules, linear & step) ---
+
+    #[test]
+    fn test_create_vesting_v2_linear() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &0, &0);
+        assert_eq!(schedule_id, 0);
+        let schedule = client.get_vesting_v2(&instructor, &schedule_id).unwrap();
+        assert_eq!(schedule.vesting_type, 0);
+    }
+
+    #[test]
+    fn test_create_vesting_v2_step() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &1, &4);
+        assert_eq!(schedule_id, 0);
+        let schedule = client.get_vesting_v2(&instructor, &schedule_id).unwrap();
+        assert_eq!(schedule.vesting_type, 1);
+        assert_eq!(schedule.step_count, 4);
+    }
+
+    #[test]
+    fn test_multiple_vesting_schedules() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let id1 = client.create_vesting_v2(&admin, &instructor, &500, &10, &30, &0, &0);
+        let id2 = client.create_vesting_v2(&admin, &instructor, &500, &10, &30, &0, &0);
+        assert_eq!(id1, 0);
+        assert_eq!(id2, 1);
+    }
+
+    #[test]
+    fn test_claim_vesting_v2_linear() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &0, &0);
+        set_ledger(&env, 20);
+        client.claim_vesting_v2(&instructor, &schedule_id);
+        assert_eq!(client.balance(&instructor), 500);
+    }
+
+    #[test]
+    fn test_claim_vesting_v2_step() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &1, &4);
+        set_ledger(&env, 15);
+        client.claim_vesting_v2(&instructor, &schedule_id);
+        // After 5 ledgers out of 20, should be 1 step out of 4
+        assert_eq!(client.balance(&instructor), 250);
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid vesting type")]
+    fn test_invalid_vesting_type_panics() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &2, &0);
+    }
+
+    #[test]
     fn test_transfer_from_does_not_overflow() {
         let (_, client, _) = setup();
         let alice = Address::generate(&client.env);
@@ -804,6 +1167,60 @@ mod tests {
         client.mint(&alice, &100);
         client.approve(&alice, &spender, &200);
         client.transfer_from(&spender, &alice, &bob, &200);
+    }
+
+    // ---- Vesting Modification Tests ------------------------------------------
+
+    #[test]
+    fn test_modify_vesting_v2_extend_end_ledger() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &0, &0);
+        
+        // Modify to extend end ledger
+        client.modify_vesting_v2(&admin, &instructor, &schedule_id, &50);
+        
+        let schedule = client.get_vesting_v2(&instructor, &schedule_id).unwrap();
+        assert_eq!(schedule.end_ledger, 50);
+    }
+
+    #[test]
+    #[should_panic(expected = "Only admin can modify vesting")]
+    fn test_non_admin_cannot_modify_vesting() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        let rando = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &0, &0);
+        
+        client.modify_vesting_v2(&rando, &instructor, &schedule_id, &50);
+    }
+
+    #[test]
+    #[should_panic(expected = "New end must be after cliff")]
+    fn test_modify_vesting_invalid_end_ledger_panics() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        let schedule_id = client.create_vesting_v2(&admin, &instructor, &1000, &10, &30, &0, &0);
+        
+        client.modify_vesting_v2(&admin, &instructor, &schedule_id, &5);
+    }
+
+    #[test]
+    fn test_get_vesting_schedule_count() {
+        let (env, client, admin) = setup();
+        let instructor = Address::generate(&env);
+        set_ledger(&env, 10);
+        
+        assert_eq!(client.get_vesting_schedule_count(&instructor), 0);
+        
+        client.create_vesting_v2(&admin, &instructor, &500, &10, &30, &0, &0);
+        assert_eq!(client.get_vesting_schedule_count(&instructor), 1);
+        
+        client.create_vesting_v2(&admin, &instructor, &500, &10, &30, &0, &0);
+        assert_eq!(client.get_vesting_schedule_count(&instructor), 2);
     }
 
     // ---- Vesting Overflow Tests ----------------------------------------------
