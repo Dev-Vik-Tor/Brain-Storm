@@ -13,6 +13,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -41,12 +42,13 @@ export class CertificatesController {
     return this.certificatesService.issueCertificate(dto);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get a certificate by ID' })
-  @ApiResponse({ status: 200, description: 'Certificate details' })
-  @ApiResponse({ status: 404, description: 'Certificate not found' })
-  getCertificate(@Param('id') id: string) {
-    return this.certificatesService.getCertificate(id);
+  // Static routes must come before parameterized routes
+  @Post('verify')
+  @ApiOperation({ summary: 'Verify a certificate by its hash (POST)' })
+  @ApiBody({ schema: { example: { certificateHash: 'abc123...' } } })
+  @ApiResponse({ status: 200, description: 'Verification result' })
+  verifyCertificateByHash(@Body() body: { certificateHash: string }) {
+    return this.certificatesService.verifyCertificate(body.certificateHash);
   }
 
   @Get('user/:userId')
@@ -54,6 +56,13 @@ export class CertificatesController {
   @ApiResponse({ status: 200, description: 'List of certificates' })
   getUserCertificates(@Param('userId') userId: string) {
     return this.certificatesService.getUserCertificates(userId);
+  }
+
+  @Get('verify/:hash')
+  @ApiOperation({ summary: 'Verify a certificate by its hash (GET)' })
+  @ApiResponse({ status: 200, description: 'Verification result' })
+  verifyCertificate(@Param('hash') hash: string) {
+    return this.certificatesService.verifyCertificate(hash);
   }
 
   @Get(':id/pdf')
@@ -69,10 +78,11 @@ export class CertificatesController {
     });
   }
 
-  @Post('verify')
-  @ApiOperation({ summary: 'Verify a certificate by its hash' })
-  @ApiResponse({ status: 200, description: 'Verification result' })
-  verifyCertificate(@Body() body: { certificateHash: string }) {
-    return this.certificatesService.verifyCertificate(body.certificateHash);
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a certificate by ID' })
+  @ApiResponse({ status: 200, description: 'Certificate details' })
+  @ApiResponse({ status: 404, description: 'Certificate not found' })
+  getCertificate(@Param('id') id: string) {
+    return this.certificatesService.getCertificate(id);
   }
 }
