@@ -8,6 +8,8 @@ pub enum DataKey {
     Admin,
     Metadata(u64),
     MetadataHash(u64),
+    MetadataHistory(u64, u32),
+    HistoryCount(u64),
 }
 
 #[contracttype]
@@ -21,11 +23,20 @@ pub struct MetadataRecord {
     pub ipfs_hash: String,
 }
 
+#[contracttype]
+#[derive(Clone)]
+pub struct MetadataHistoryEntry {
+    pub credential_id: u64,
+    pub course_name: String,
+    pub grade: String,
+    pub recorded_at: u64,
+}
+
 const STORE: Symbol = symbol_short!("store");
 const UPDATE: Symbol = symbol_short!("update");
 const EXPIRE: Symbol = symbol_short!("expire");
 const RENEW: Symbol = symbol_short!("renew");
-const GRACE_PERIOD_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days grace period
+const GRACE_PERIOD_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 #[contract]
 pub struct CredentialMetadataContract;
@@ -88,6 +99,27 @@ impl CredentialMetadataContract {
             .persistent()
             .get(&DataKey::Metadata(credential_id))
             .expect("Metadata not found");
+
+        let history_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::HistoryCount(credential_id))
+            .unwrap_or(0);
+
+        let history_entry = MetadataHistoryEntry {
+            credential_id,
+            course_name: metadata.course_name.clone(),
+            grade: metadata.grade.clone(),
+            recorded_at: env.ledger().timestamp(),
+        };
+
+        env.storage().persistent().set(
+            &DataKey::MetadataHistory(credential_id, history_count),
+            &history_entry,
+        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::HistoryCount(credential_id), &(history_count + 1));
 
         metadata.course_name = course_name;
         metadata.grade = grade;
@@ -193,6 +225,23 @@ impl CredentialMetadataContract {
             Some(h) => h == hash,
             None => false,
         }
+    }
+
+    pub fn get_metadata_history(
+        env: Env,
+        credential_id: u64,
+        index: u32,
+    ) -> Option<MetadataHistoryEntry> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MetadataHistory(credential_id, index))
+    }
+
+    pub fn get_history_count(env: Env, credential_id: u64) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::HistoryCount(credential_id))
+            .unwrap_or(0)
     }
 }
 
