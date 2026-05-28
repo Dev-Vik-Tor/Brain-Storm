@@ -22,6 +22,8 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CourseQueryDto } from './dto/course-query.dto';
+import { CreateCourseDto } from './dto/create-course.dto';
+import { UpdateCourseDto } from './dto/update-course.dto';
 import { ScheduleCourseDto } from './dto/schedule-course.dto';
 
 @ApiTags('courses')
@@ -80,15 +82,7 @@ export class CoursesController {
   @Roles('admin', 'instructor')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a new course' })
-  @ApiBody({
-    schema: {
-      example: {
-        title: 'Intro to Stellar',
-        description: 'Learn Stellar basics',
-        level: 'beginner',
-      },
-    },
-  })
+  @ApiBody({ type: CreateCourseDto })
   @ApiResponse({
     status: 201,
     description: 'Course created successfully',
@@ -96,7 +90,7 @@ export class CoursesController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
-  create(@Body() data: any) {
+  create(@Body() data: CreateCourseDto) {
     return this.coursesService.create(data);
   }
 
@@ -105,7 +99,7 @@ export class CoursesController {
   @Roles('admin', 'instructor')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a course' })
-  @ApiBody({ schema: { example: { title: 'Updated title', description: 'Updated description' } } })
+  @ApiBody({ type: UpdateCourseDto })
   @ApiResponse({
     status: 200,
     description: 'Course updated successfully',
@@ -114,7 +108,7 @@ export class CoursesController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
   @ApiResponse({ status: 404, description: 'Course not found' })
-  update(@Param('id') id: string, @Body() data: any) {
+  update(@Param('id') id: string, @Body() data: UpdateCourseDto) {
     return this.coursesService.update(id, data);
   }
 

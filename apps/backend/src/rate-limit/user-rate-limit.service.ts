@@ -1,7 +1,8 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { UserRole } from '../users/entities/user.entity';
+
+export type UserRole = 'admin' | 'instructor' | 'student' | 'guest';
 
 export interface RateLimitConfig {
   limit: number;
@@ -9,10 +10,10 @@ export interface RateLimitConfig {
 }
 
 export const RATE_LIMIT_CONFIGS: Record<UserRole, RateLimitConfig> = {
-  [UserRole.ADMIN]: { limit: 10000, windowMs: 60000 },
-  [UserRole.INSTRUCTOR]: { limit: 5000, windowMs: 60000 },
-  [UserRole.STUDENT]: { limit: 1000, windowMs: 60000 },
-  [UserRole.GUEST]: { limit: 100, windowMs: 60000 },
+  admin: { limit: 10000, windowMs: 60000 },
+  instructor: { limit: 5000, windowMs: 60000 },
+  student: { limit: 1000, windowMs: 60000 },
+  guest: { limit: 100, windowMs: 60000 },
 };
 
 @Injectable()
