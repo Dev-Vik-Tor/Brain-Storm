@@ -235,6 +235,45 @@ impl SharedContract {
     }
 
     // -------------------------------------------------------------------------
+    // Reentrancy Guard
+    // -------------------------------------------------------------------------
+
+    pub fn acquire_reentrancy_lock(env: Env) {
+        reentrancy::acquire_lock(&env);
+    }
+
+    pub fn release_reentrancy_lock(env: Env) {
+        reentrancy::release_lock(&env);
+    }
+
+    pub fn is_reentrancy_locked(env: Env) -> bool {
+        reentrancy::is_locked(&env)
+    }
+
+    // -------------------------------------------------------------------------
+    // Common Validation
+    // -------------------------------------------------------------------------
+
+    pub fn validate_positive_amount(env: Env, amount: i128) {
+        let _ = env;
+        validation::require_positive_amount(amount);
+    }
+
+    pub fn validate_percentage(env: Env, pct: u32) {
+        let _ = env;
+        validation::require_percentage_valid(pct);
+    }
+
+    pub fn validate_percentages_sum(env: Env, a: u32, b: u32, c: u32) {
+        let _ = env;
+        validation::require_percentages_sum_100(a, b, c);
+    }
+
+    pub fn validate_future_timestamp(env: Env, ts: u64) {
+        validation::require_future_timestamp(&env, ts);
+    }
+
+    // -------------------------------------------------------------------------
     // Emergency Pause
     // -------------------------------------------------------------------------
 
@@ -262,5 +301,8 @@ impl SharedContract {
 }
 
 pub mod multisig;
+pub mod reentrancy;
+pub mod validation;
+pub mod errors;
 
 mod tests;
