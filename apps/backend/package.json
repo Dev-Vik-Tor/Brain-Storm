@@ -14,7 +14,10 @@
     "test": "jest",
     "test:integration": "jest --config jest-integration.config.js --runInBand",
     "test:e2e": "jest --config jest-e2e.config.js --runInBand",
-    "test:pact": "jest --testPathPattern=pact"
+    "test:pact": "jest --testPathPattern=pact",
+    "seed:basic": "ts-node -r tsconfig-paths/register src/test/seeds/basic.seed.ts",
+    "seed:performance": "ts-node -r tsconfig-paths/register src/test/seeds/performance.seed.ts",
+    "seed:cleanup": "ts-node -r tsconfig-paths/register src/test/seeds/cleanup.seed.ts"
   },
   "dependencies": {
     "@brain-storm/types": "*",
@@ -81,6 +84,7 @@
     "@types/xml2js": "^0.4.14",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@faker-js/faker": "^8.4.1",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-prettier": "^5.0.0",
@@ -88,6 +92,8 @@
     "prettier": "^3.0.0",
     "testcontainers": "^10.0.0",
     "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.0",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.4.0"
   }
 }
