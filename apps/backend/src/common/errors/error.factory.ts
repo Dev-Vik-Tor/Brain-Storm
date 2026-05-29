@@ -1,35 +1,53 @@
-import { AppError, ErrorCode } from './app.error';
+import {
+  AppError,
+  ValidationError,
+  AuthenticationError,
+  AuthorizationError,
+  NotFoundError,
+  ConflictError,
+  StellarError,
+  DatabaseError,
+  ErrorCode,
+} from './app.error';
 
 export class ErrorFactory {
-  static validation(message: string, context?: Record<string, any>): AppError {
-    return new AppError(ErrorCode.VALIDATION_ERROR, 400, message, context);
+  static validation(message: string, details?: Record<string, any>): ValidationError {
+    return new ValidationError(message, details);
   }
 
-  static notFound(message: string, context?: Record<string, any>): AppError {
-    return new AppError(ErrorCode.NOT_FOUND, 404, message, context);
+  static authentication(message?: string): AuthenticationError {
+    return new AuthenticationError(message);
   }
 
-  static unauthorized(message: string, context?: Record<string, any>): AppError {
-    return new AppError(ErrorCode.UNAUTHORIZED, 401, message, context);
+  static authorization(message?: string): AuthorizationError {
+    return new AuthorizationError(message);
   }
 
-  static forbidden(message: string, context?: Record<string, any>): AppError {
-    return new AppError(ErrorCode.FORBIDDEN, 403, message, context);
+  static notFound(resource: string): NotFoundError {
+    return new NotFoundError(resource);
   }
 
-  static conflict(message: string, context?: Record<string, any>): AppError {
-    return new AppError(ErrorCode.CONFLICT, 409, message, context);
+  static conflict(message: string): ConflictError {
+    return new ConflictError(message);
   }
 
-  static externalService(message: string, context?: Record<string, any>): AppError {
-    return new AppError(ErrorCode.EXTERNAL_SERVICE_ERROR, 502, message, context);
+  static stellar(message: string, details?: Record<string, any>): StellarError {
+    return new StellarError(message, details);
   }
 
-  static rateLimit(message: string, context?: Record<string, any>): AppError {
-    return new AppError(ErrorCode.RATE_LIMIT_EXCEEDED, 429, message, context);
+  static database(message: string, details?: Record<string, any>): DatabaseError {
+    return new DatabaseError(message, details);
   }
 
-  static internal(message: string, context?: Record<string, any>): AppError {
-    return new AppError(ErrorCode.INTERNAL_ERROR, 500, message, context);
+  static internal(message: string = 'Internal server error'): AppError {
+    return new AppError(ErrorCode.INTERNAL_ERROR, message, 500);
+  }
+
+  static fromUnknown(error: unknown): AppError {
+    if (error instanceof AppError) return error;
+    if (error instanceof Error) {
+      return new AppError(ErrorCode.INTERNAL_ERROR, error.message, 500);
+    }
+    return new AppError(ErrorCode.INTERNAL_ERROR, 'Unknown error', 500);
   }
 }

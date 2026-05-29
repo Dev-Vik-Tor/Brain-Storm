@@ -1,72 +1,71 @@
 export enum ErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
+  AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
+  AUTHORIZATION_ERROR = 'AUTHORIZATION_ERROR',
   NOT_FOUND = 'NOT_FOUND',
-  UNAUTHORIZED = 'UNAUTHORIZED',
-  FORBIDDEN = 'FORBIDDEN',
   CONFLICT = 'CONFLICT',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
-  EXTERNAL_SERVICE_ERROR = 'EXTERNAL_SERVICE_ERROR',
-  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+  STELLAR_ERROR = 'STELLAR_ERROR',
+  DATABASE_ERROR = 'DATABASE_ERROR',
 }
 
 export class AppError extends Error {
   constructor(
     public code: ErrorCode,
-    public statusCode: number,
-    message: string,
-    public context?: Record<string, any>,
+    public message: string,
+    public statusCode: number = 500,
+    public details?: Record<string, any>
   ) {
     super(message);
     this.name = 'AppError';
-    Object.setPrototypeOf(this, AppError.prototype);
   }
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string, context?: Record<string, any>) {
-    super(ErrorCode.VALIDATION_ERROR, 400, message, context);
+  constructor(message: string, details?: Record<string, any>) {
+    super(ErrorCode.VALIDATION_ERROR, message, 400, details);
     this.name = 'ValidationError';
   }
 }
 
+export class AuthenticationError extends AppError {
+  constructor(message: string = 'Authentication failed') {
+    super(ErrorCode.AUTHENTICATION_ERROR, message, 401);
+    this.name = 'AuthenticationError';
+  }
+}
+
+export class AuthorizationError extends AppError {
+  constructor(message: string = 'Access denied') {
+    super(ErrorCode.AUTHORIZATION_ERROR, message, 403);
+    this.name = 'AuthorizationError';
+  }
+}
+
 export class NotFoundError extends AppError {
-  constructor(message: string, context?: Record<string, any>) {
-    super(ErrorCode.NOT_FOUND, 404, message, context);
+  constructor(resource: string) {
+    super(ErrorCode.NOT_FOUND, `${resource} not found`, 404);
     this.name = 'NotFoundError';
   }
 }
 
-export class UnauthorizedError extends AppError {
-  constructor(message: string, context?: Record<string, any>) {
-    super(ErrorCode.UNAUTHORIZED, 401, message, context);
-    this.name = 'UnauthorizedError';
-  }
-}
-
-export class ForbiddenError extends AppError {
-  constructor(message: string, context?: Record<string, any>) {
-    super(ErrorCode.FORBIDDEN, 403, message, context);
-    this.name = 'ForbiddenError';
-  }
-}
-
 export class ConflictError extends AppError {
-  constructor(message: string, context?: Record<string, any>) {
-    super(ErrorCode.CONFLICT, 409, message, context);
+  constructor(message: string) {
+    super(ErrorCode.CONFLICT, message, 409);
     this.name = 'ConflictError';
   }
 }
 
-export class ExternalServiceError extends AppError {
-  constructor(message: string, context?: Record<string, any>) {
-    super(ErrorCode.EXTERNAL_SERVICE_ERROR, 502, message, context);
-    this.name = 'ExternalServiceError';
+export class StellarError extends AppError {
+  constructor(message: string, details?: Record<string, any>) {
+    super(ErrorCode.STELLAR_ERROR, message, 500, details);
+    this.name = 'StellarError';
   }
 }
 
-export class RateLimitError extends AppError {
-  constructor(message: string, context?: Record<string, any>) {
-    super(ErrorCode.RATE_LIMIT_EXCEEDED, 429, message, context);
-    this.name = 'RateLimitError';
+export class DatabaseError extends AppError {
+  constructor(message: string, details?: Record<string, any>) {
+    super(ErrorCode.DATABASE_ERROR, message, 500, details);
+    this.name = 'DatabaseError';
   }
 }
