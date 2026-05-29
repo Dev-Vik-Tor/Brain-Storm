@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env, Symbol, symbol_short, i128};
+use soroban_sdk::{contracttype, Address, Env, Symbol, symbol_short};
 
 #[contracttype]
 #[derive(Clone)]
