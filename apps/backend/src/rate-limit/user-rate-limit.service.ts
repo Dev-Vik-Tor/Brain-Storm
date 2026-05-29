@@ -2,25 +2,18 @@ import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 
+export type UserRole = 'admin' | 'instructor' | 'student' | 'guest';
+
 export interface RateLimitConfig {
   limit: number;
   windowMs: number;
 }
 
-// Per-role default limits
-export const ROLE_RATE_LIMITS: Record<string, RateLimitConfig> = {
+export const RATE_LIMIT_CONFIGS: Record<UserRole, RateLimitConfig> = {
   admin: { limit: 10000, windowMs: 60000 },
   instructor: { limit: 5000, windowMs: 60000 },
   student: { limit: 1000, windowMs: 60000 },
   guest: { limit: 100, windowMs: 60000 },
-};
-
-// Endpoint-specific overrides (keyed by route pattern)
-export const ENDPOINT_RATE_LIMITS: Record<string, RateLimitConfig> = {
-  'POST:/v1/auth/login': { limit: 10, windowMs: 60000 },
-  'POST:/v1/auth/register': { limit: 5, windowMs: 60000 },
-  'POST:/v1/certificates': { limit: 20, windowMs: 60000 },
-  'POST:/v1/stellar/mint': { limit: 3, windowMs: 60000 },
 };
 
 @Injectable()
