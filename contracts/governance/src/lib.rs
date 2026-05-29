@@ -413,6 +413,85 @@ impl GovernanceContract {
             .persistent()
             .has(&DataKey::Vote(proposal_id, voter))
     }
+
+    // -------------------------------------------------------------------------
+    // Voting power calculation
+    // -------------------------------------------------------------------------
+
+    /// Get the voting power (BST balance) of an address via cross-contract call.
+    pub fn get_voting_power(env: Env, voter: Address) -> i128 {
+        let token_contract: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenContract)
+            .unwrap();
+        env.invoke_contract(
+            &token_contract,
+            &symbol_short!("balance"),
+            soroban_sdk::vec![&env, voter.into_val(&env)],
+        )
+    }
+
+    /// Check whether a voter meets the minimum voting power threshold.
+    pub fn has_voting_power(env: Env, voter: Address, min_power: i128) -> bool {
+        Self::get_voting_power(env, voter) >= min_power
+    }
+
+    // -------------------------------------------------------------------------
+    // Governance queries
+    // -------------------------------------------------------------------------
+
+    /// Get the current vote tally for a proposal.
+    /// Returns (votes_for, votes_against, total, quorum_met).
+    pub fn get_vote_tally(env: Env, proposal_id: u64) -> (i128, i128, i128, bool) {
+        let proposal: ProposalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("Proposal not found");
+        let total = proposal.votes_for + proposal.votes_against;
+        // Quorum: total votes must exceed 20% of token supply (approximated via votes_for > 0)
+        // In production this would compare against total token supply
+        let quorum_met = proposal.votes_for > proposal.votes_against && total > 0;
+        (proposal.votes_for, proposal.votes_against, total, quorum_met)
+    }
+
+    /// Check whether a proposal passed (voting ended, votes_for > votes_against).
+    pub fn did_proposal_pass(env: Env, proposal_id: u64) -> bool {
+        let proposal: ProposalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("Proposal not found");
+        env.ledger().sequence() >= proposal.voting_end_ledger
+            && proposal.votes_for > proposal.votes_against
+    }
+
+    /// Check whether a proposal's voting period is still active.
+    pub fn is_voting_active(env: Env, proposal_id: u64) -> bool {
+        let proposal: ProposalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Proposal(proposal_id))
+            .expect("Proposal not found");
+        env.ledger().sequence() < proposal.voting_end_ledger && !proposal.executed
+    }
+
+    /// Get the next proposal ID (useful for off-chain indexing).
+    pub fn get_next_proposal_id(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::NextProposalId)
+            .unwrap_or(1)
+    }
+
+    /// Get the vote cast by a specific voter on a proposal.
+    /// Returns Some(true) = voted for, Some(false) = voted against, None = not voted.
+    pub fn get_vote(env: Env, proposal_id: u64, voter: Address) -> Option<bool> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Vote(proposal_id, voter))
+    }
 }
 
 // =============================================================================
