@@ -88,3 +88,9 @@ variable "alert_sns_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "api_gateway_cors_origins" {
+  description = "Allowed CORS origins for the API Gateway"
+  type        = list(string)
+  default     = ["*"]
+}

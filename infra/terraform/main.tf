@@ -94,3 +94,14 @@ module "secrets" {
   enable_rotation    = var.environment == "prod"
   alert_sns_arns     = var.alert_sns_arns
 }
+
+module "api_gateway" {
+  source = "./modules/api-gateway"
+
+  environment        = var.environment
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
+  alb_listener_arn   = module.alb.http_listener_arn
+  cors_allow_origins = var.api_gateway_cors_origins
+  alert_sns_arns     = var.alert_sns_arns
+}
