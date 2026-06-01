@@ -7,6 +7,7 @@ import { Inject } from '@nestjs/common';
 import { Course, CourseStatus } from './course.entity';
 import { CourseQueryDto } from './dto/course-query.dto';
 import { SearchService } from '../search/search.service';
+import { PaginatedResponseDto } from '../common/dto/api-response.dto';
 
 @Injectable()
 export class CoursesService {
@@ -24,9 +25,11 @@ export class CoursesService {
     const { search, level, page = 1, limit = 20 } = query;
     const cacheKey = `${this.CACHE_KEY}:${search ?? 'all'}:${level ?? 'all'}:${page}:${limit}`;
 
-    return this.cacheManager.wrap(cacheKey, async () => this.queryCourses(query), {
+    const result = await this.cacheManager.wrap(cacheKey, async () => this.queryCourses(query), {
       ttl: this.CACHE_TTL,
     });
+
+    return new PaginatedResponseDto(result.data, 200, result.page, result.limit, result.total);
   }
 
   private async queryCourses(query: CourseQueryDto = {}) {
